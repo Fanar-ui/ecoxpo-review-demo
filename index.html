@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Nutrition Basics</title>
+  <style>
+    :root {
+      --ink: #18181b; --label: #52525b; --muted: #8a8a92;
+      --bg: #fbfbfa; --card: #ffffff; --mint: #edfaf4; --peach: #fff3ea; --green: #10b981;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { min-height: 100vh; padding: calc(env(safe-area-inset-top) + 20px) 18px calc(env(safe-area-inset-bottom) + 24px); }
+    .wrap { max-width: 520px; margin: 0 auto; }
+    .kicker { font: 600 11px ui-monospace, Menlo, monospace; letter-spacing: .08em; color: var(--label); }
+    h1 { font-size: 28px; margin: 6px 0 4px; letter-spacing: -.02em; }
+    .sub { color: var(--label); font-size: 15px; line-height: 1.45; margin: 0 0 18px; }
+    .card { background: var(--card); border: 2px solid var(--ink); border-radius: 14px; padding: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    textarea { width: 100%; min-height: 90px; resize: vertical; border: 0; outline: 0; font: inherit;
+      font-size: 16px; line-height: 1.4; color: var(--ink); background: transparent; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+    .chip { border: 1.5px solid var(--ink); background: var(--mint); border-radius: 999px; padding: 7px 12px;
+      font-size: 13px; cursor: pointer; color: var(--ink); }
+    button.ask { margin-top: 14px; width: 100%; padding: 14px; border-radius: 999px; border: 2px solid var(--ink);
+      background: var(--peach); font: 700 16px inherit; font-family: inherit; color: var(--ink); cursor: pointer; }
+    button.ask:disabled { opacity: .5; }
+    .answer { margin-top: 18px; display: none; }
+    .answer.show { display: block; }
+    .answer p { margin: 8px 0 0; font-size: 15px; line-height: 1.55; white-space: pre-wrap; }
+    .meta { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--muted);
+      font: 12px ui-monospace, Menlo, monospace; color: var(--label); line-height: 1.6; }
+    .error { color: #b91c1c; }
+    .dots::after { content: ""; animation: dots 1.2s steps(4) infinite; }
+    @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+    .note { margin-top: 18px; font-size: 12px; color: var(--muted); line-height: 1.5; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">ECOXPO · DEMO MINI APP</div>
+    <h1>Nutrition Basics</h1>
+    <p class="sub">Ask a general question about calorie deficits or protein. A small decision tree picks the
+      right open-source model and shows the footprint of each answer.</p>
+
+    <div class="card">
+      <textarea id="q" maxlength="500" placeholder="e.g. How does a calorie deficit work?"></textarea>
+    </div>
+    <div class="chips">
+      <button class="chip" type="button">How does a calorie deficit work?</button>
+      <button class="chip" type="button">Which foods are rich in protein?</button>
+      <button class="chip" type="button">What does protein do in the body?</button>
+    </div>
+    <button class="ask" id="ask" type="button">Ask</button>
+
+    <div class="card answer" id="answer">
+      <div class="kicker" id="who">ANSWER</div>
+      <p id="text"></p>
+      <div class="meta" id="meta"></div>
+    </div>
+
+    <p class="note">General information only – not medical or nutrition advice.
+      Your question is processed by EcoGovernance and the model provider via OpenRouter.</p>
+  </div>
+
+  <script src="_xpo/ecoxpo.js"></script>
+  <script>
+    var q = document.getElementById("q");
+    var askBtn = document.getElementById("ask");
+    var box = document.getElementById("answer");
+    var who = document.getElementById("who");
+    var text = document.getElementById("text");
+    var meta = document.getElementById("meta");
+
+    document.querySelectorAll(".chip").forEach(function (c) {
+      c.addEventListener("click", function () { q.value = c.textContent; ask(); });
+    });
+    askBtn.addEventListener("click", ask);
+
+    function fmt(v, unit, factor, digits) {
+      return v == null ? "–" : (v * factor).toFixed(digits) + " " + unit;
+    }
+
+    async function ask() {
+      var question = q.value.trim();
+      if (!question || askBtn.disabled) return;
+      askBtn.disabled = true;
+      box.classList.add("show");
+      who.textContent = "THINKING";
+      text.className = "dots";
+      text.textContent = "";
+      meta.textContent = "";
+      try {
+        var r = await EcoXPO.askTree(question, { node_response_fields: ["choices.0.message.content"] });
+        var nr = r.node_response || {};
+        var answer = nr["choices.0.message.content"] || nr.text || "No answer received.";
+        who.textContent = "ANSWER" + (r.model ? " · " + r.model.split("/").pop().toUpperCase() : "");
+        text.className = "";
+        text.textContent = answer;
+        var f = r.footprint || {};
+        meta.innerHTML =
+          "⚡ " + fmt(f.energy_kwh, "mWh", 1e6, 0) +
+          " &nbsp; 💧 " + fmt(f.water_l, "mL", 1e3, 2) +
+          " &nbsp; 🌍 " + fmt(f.carbon_kg, "mg CO₂", 1e6, 1);
+      } catch (e) {
+        who.textContent = "SOMETHING WENT WRONG";
+        text.className = "error";
+        text.textContent = (e && e.message) || "Please try again.";
+      } finally {
+        askBtn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
